@@ -1,5 +1,7 @@
 package ves011.mqtt_service;
 
+import static androidx.core.app.NotificationCompat.PRIORITY_MAX;
+
 import android.Manifest;
 import android.app.Application;
 import android.app.Notification;
@@ -53,7 +55,6 @@ public class MQTTService extends Service
     public PrivateKey privateKey = null;
     public String serverUrl = null, aliasCert = null, subscribeTopic = null, publishTopic = null;
     //up to max 5 topics
-    private String[] topics = new String[5];
     public MqttClient client;
 
     //private final IBinder mBinder = new LocalBinder();
@@ -105,15 +106,13 @@ public class MQTTService extends Service
         {
         super.onCreate();
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
-        serverUrl = settings.getString(getString(R.string.PREF_URL), "");
-        aliasCert = settings.getString(getString(R.string.PREF_CERT_ALIAS), "");
+        serverUrl = settings.getString(getString(R.string.SERVERURL), "");
+        aliasCert = settings.getString(getString(R.string.CERTALIAS), "");
         subscribeTopic = settings.getString(getString(R.string.TOPIC_MONITOR), "");
         publishTopic = settings.getString(getString(R.string.TOPIC_CTRL), "");
 
         createNotChnn();
         isRunning = true;
-        topics[0] = getString(R.string.gnetdev_response);
-        topics[1] = getString(R.string.wmon_state);
         Log.d(TAG, "onCreate()");
         }
 
@@ -134,7 +133,10 @@ public class MQTTService extends Service
                                    .setSmallIcon(R.drawable.ic_mqtt)
                                    .setContentIntent(pendingIntent)
                                    .setColor(getColor(R.color.white))
+                                   .setOngoing(true)
+                                   .setPriority(PRIORITY_MAX)
                                    .build();
+        not.flags = Notification.FLAG_ONGOING_EVENT;
         startForeground(NOT_STATE_ID, not);
         connect2Server();
         Log.d(TAG, "onStartCommand()");
@@ -184,8 +186,8 @@ public class MQTTService extends Service
         }
     public void stateNotification()
         {
-        String str = isConnected ? "connected to broker" : "disconnected";
         int color;
+        String str;
         if(isConnected == true)
             {
             str = "connected to broker";
@@ -204,8 +206,10 @@ public class MQTTService extends Service
                                    .setSmallIcon(R.drawable.ic_mqtt)
                                    .setContentIntent(pendingIntent)
                                    .setColor(getColor(color))
+                                   .setOngoing(true)
+                                   .setPriority(PRIORITY_MAX)
                                    .build();
-    
+        not.flags = Notification.FLAG_ONGOING_EVENT;
         if(ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
             NotificationManagerCompat.from(this).notify(NOT_STATE_ID, not);
         }
@@ -317,12 +321,29 @@ public class MQTTService extends Service
         }
     public void setCerts(X509Certificate[] c,    PrivateKey pk, String alias)
         {
-        //if(c != null)
-            chain = c;
-        //if(pk != null)
-            privateKey = pk;
-        //if(alias != null)
-            aliasCert = alias;
+        chain = c;
+        privateKey = pk;
+        aliasCert = alias;
+        }
+    public int sendMessage(String topic, String message)
+        {
+        int ret = 0;
+        if(isConnected)
+            {
+            try
+                {
+                client.publish(topic, message.getBytes(), 1, false);
+                }
+            catch(MqttException e)
+                {
+                e.printStackTrace();
+                Log.d(TAG, e.getMessage());
+                ret = -2;
+                }
+            }
+        else
+            ret = -1;
+        return ret;
         }
     public void gcComplete(boolean status)
         {

@@ -20,6 +20,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -37,7 +38,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
     {
     // declaring objects of Button class
     private Button ssButton;
-    private TextView tvCert, tvServer, tvState, tvTopics, tvConError, tvTimeStamp;
+    private TextView tvCert, tvServer, tvState, tvTopics, tvConError, tvTimeStamp, tvMsgContent;
     private final String TAG = "MA";
     AlertDialog dialog;
     MQTTService mqttservice = null;
@@ -89,6 +90,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
                 SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                 String strcd = simpleDateFormat.format(cd);
                 tvTimeStamp.setText(strcd);
+                parseMessage(intent.getStringExtra("TOPIC"), intent.getByteArrayExtra("PAYLOAD"));
                 }
             else if(action.equals(getString(R.string.ACTION_UPDATE_CERT)))
                 {
@@ -141,6 +143,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
         tvConError = findViewById(R.id.conError);
         tvTopics = findViewById(R.id.topics);
         tvTimeStamp = findViewById(R.id.timeStamp);
+        tvMsgContent = findViewById(R.id.msgContent);
         tvTimeStamp.setText("");
         tvState.setText("N/A");
         tvConError.setText("");
@@ -150,12 +153,12 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
         ssButton = findViewById(R.id.ssButton);
         ssButton.setText("N/A");
 
+        
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(getString(R.string.ACTION_NEW_MESSAGE));
         intentFilter.addAction(getString(R.string.ACTION_STATE_CHANGE));
         intentFilter.addAction(getString(R.string.ACTION_UPDATE_CERT));
         registerReceiver(receiver, intentFilter, RECEIVER_EXPORTED);
-        
         startService(new Intent(this, MQTTService.class));
         }
     @Override
@@ -202,7 +205,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
         serverURL = str;
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
         SharedPreferences.Editor ed = settings.edit();
-        ed.putString(getString(R.string.PREF_URL), str);
+        ed.putString(getString(R.string.SERVERURL), str);
         ed.apply();
         if(mqttservice != null)
             mqttservice.serverUrl = str;//.setServerURL(str);
@@ -248,6 +251,22 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
                              "publish: " + pt;
         tvTopics.setText(str);
         dialog.cancel();
+        }
+    public void getState(View v)
+        {
+        Toast ts = null;
+        if(publishTopic != null && publishTopic.length() > 5)
+            {
+            int ret = mqttservice.sendMessage(publishTopic, getString(R.string.GETSTATE_MSG));
+            if(ret == -1) // not connected to server
+                ts = Toast.makeText(this, "not connected to server", Toast.LENGTH_LONG);
+            else if(ret == -2) // error publising message
+                ts = Toast.makeText(this, "publish message error", Toast.LENGTH_LONG);
+            }
+        else
+            ts = Toast.makeText(this, "publish topic not provided or invalid", Toast.LENGTH_LONG);
+        if(ts != null)
+            ts.show();
         }
     public void selCert(View v)
         {
@@ -314,7 +333,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
         }
     
     
-    public void parseMessage(String topic, char[] payload)
+    public void parseMessage(String topic, byte[] payload)
         {
         /*
         parse received messages and display the content
