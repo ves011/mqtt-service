@@ -19,9 +19,9 @@
     <string name="CERTALIAS">certAlias</string>
 
     <!-- default topic names -->
-    <string name="TOPIC_MONITOR">wmon/monitor</string>
+    <string name="TOPIC_MONITOR">wmon/state</string>
     <string name="TOPIC_CTRL">wmon/ctrl</string>
 
     <!-- message sent to TOPIC_CTRL when user press getState button -->
-    <string name="GETSTATE_MSG">reqID</string>
+    <string name="GETSTATE_MSG">wmon status</string>
 </resources>

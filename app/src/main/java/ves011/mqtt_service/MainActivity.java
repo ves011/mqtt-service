@@ -116,7 +116,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
             intent.setAction(getString(R.string.ACTION_STATE_CHANGE));
             intent.putExtra("STATE", mqttservice.isConnected);
             intent.putExtra("SUBTOPIC", subscribeTopic);
-            intent.putExtra("PUBTOPic", publishTopic);
+            intent.putExtra("PUBTOPIC", publishTopic);
             if(mqttservice.isConnected == true)
                 intent.putExtra("URL", mqttservice.serverUrl);
             else
@@ -332,9 +332,63 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
             mqttservice.disconnect();
         }
     
-    
+/*
+#define DVSTATE_ERR			0x01		// error state
+#define DVSTATE_OPEN		0x02		// open
+#define DVSTATE_CLOSE		0x04		// closed
+#define MANUAL_BIT			0x100		// manual mode bit
+#define DV_POWER_ERR_BIT	0x200		// no power to dv
+#define MANUAL_BIT_FAILURE	0x400		// no readings for manual switch position
+
+#define CHARGING_NA		1
+#define CHARGING_ON		2
+#define CHARGING_OFF	3
+ */
     public void parseMessage(String topic, byte[] payload)
         {
+        
+        String state, tstr;
+        int f_int;
+        String str = new String(payload);
+        String[] fields = str.split("\1");
+        if(fields.length == 15)
+            {
+            state = "Sensor state: " + fields[6] + "\n";
+            state += "DV state: ";
+            f_int = Integer.parseInt(fields[9]);
+            tstr = "N/A";
+            if((f_int & 2) == 2)
+                tstr = "OPEN";
+            if((f_int & 4) == 4)
+                tstr = "CLOSE";
+            state += tstr;state += "\n";
+            tstr = "OK";
+            state += "DV mode: ";
+            if((f_int & 0x100) == 0x100)
+                tstr = "manual";
+            if((f_int & 0x200) == 0x200)
+                tstr = "power fail";
+            if((f_int & 0x400) == 0x400)
+                tstr = "hall sensor error";
+            state += tstr; state += "\n";
+            state += "Last DV check: " + fields[10] + "\n";
+            state += "Battery: " + fields[8] + " (V)\n";
+            state += "Charging state: ";
+            f_int = Integer.parseInt(fields[3]);
+            if(f_int == 1)
+                tstr = "N/A";
+            if(f_int == 2)
+                tstr = "charging";
+            if(f_int == 3)
+                tstr = "idle";
+            state += tstr; state += "\n";
+            state += "Last charge start: " + fields[4] + "\n";
+            state += "Last charge end: " + fields[5] + "\n";
+            state += "Uptime: " + fields[11] +"d " + fields[12] +"h " + fields[13] +"m " + fields[14] +"s\n";
+            tvMsgContent.setText(state);
+            }
+        
+        
         /*
         parse received messages and display the content
         */

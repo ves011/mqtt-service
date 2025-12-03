@@ -56,22 +56,31 @@ public class MQTTService extends Service
     public String serverUrl = null, aliasCert = null, subscribeTopic = null, publishTopic = null;
     //up to max 5 topics
     public MqttClient client;
+    private final int keepAlive = 20;
 
     //private final IBinder mBinder = new LocalBinder();
     public boolean isRunning = false, isConnected = false;
+    private HeartBeat hb;
     //private Binder binder = new Binder();
     MqttCallback MQTTcb = new MqttCallback()
         {
         @Override
         public void connectionLost(Throwable cause)
             {
+            /* some manual reconnect in case automaticReconnect = true does not work */
+            /*
             isConnected = false;
-            stateNotification();
-            Intent intent = new Intent();
-            intent.setAction(getString(R.string.ACTION_STATE_CHANGE));
-            intent.putExtra("URL", serverUrl);
-            intent.putExtra("ERROR", "connection lost");
-            sendBroadcast(intent);
+            connect2Server();
+            if(isConnected == false)
+            */
+                {
+                stateNotification();
+                Intent intent = new Intent();
+                intent.setAction(getString(R.string.ACTION_STATE_CHANGE));
+                intent.putExtra("URL", serverUrl);
+                intent.putExtra("ERROR", "connection lost");
+                sendBroadcast(intent);
+                }
             }
 
         @Override
@@ -113,6 +122,7 @@ public class MQTTService extends Service
 
         createNotChnn();
         isRunning = true;
+        hb = new HeartBeat(this, keepAlive);
         Log.d(TAG, "onCreate()");
         }
 
@@ -240,10 +250,27 @@ public class MQTTService extends Service
                         client = new MqttClient(serverUrl, clientID, null);
                         client.setCallback(MQTTcb);
                         MqttConnectOptions options = new MqttConnectOptions();
-                        options.setConnectionTimeout(10);
-                        options.setKeepAliveInterval(60);
+                        options.setConnectionTimeout(0);
+                        options.setKeepAliveInterval(keepAlive);
+                        options.setAutomaticReconnect(true);
                         options.setMqttVersion(MqttConnectOptions.MQTT_VERSION_3_1);
-
+                        
+                        // user/password authentication
+                        /*
+                        options.setPassword("c1".toCharArray());
+                        options.setUserName("c1");
+                        Log.d(TAG, "starting connect the server...");
+                        client.connect(options);
+                        Log.d(TAG, "connected!");
+                        if(subscribeTopic != null)
+                            client.subscribe(subscribeTopic);
+                        isConnected = true;
+                        intent.putExtra("STATE", isConnected);
+                        intent.putExtra("ERROR", "");
+                        // --------------------------------------------------
+                        */
+                        
+                        //certificate authentication
                         SSLSocketFactory socketFactory = getSF();
                         if(socketFactory != null)
                             {
@@ -262,12 +289,16 @@ public class MQTTService extends Service
                             intent.putExtra("STATE", isConnected);
                             intent.putExtra("ERROR", "SSL socket factory error");
                             }
+                        // --------------------------------------------------
+                        hb.startLoop();
                         stateNotification();
                         sendBroadcast(intent);
                         }
                     catch(MqttException e)
                         {
                         String s = String.valueOf(e.getCause());
+                        if(s.equals("null"))
+                            s= e.getMessage();
                         Log.d(TAG, "MQTT connect exception: " + s);
                         intent.putExtra("STATE", isConnected);
                         intent.putExtra("ERROR", s);
@@ -316,6 +347,7 @@ public class MQTTService extends Service
             intent.putExtra("URL", "");
             stateNotification();
             sendBroadcast(intent);
+            hb.stopLoop();
             }
         catch(Exception e) { e.printStackTrace();}
         }
@@ -386,7 +418,7 @@ Could not make it run on Android studio emulator
         try
             {
             ks.setCertificateEntry("certificate", chain[0]);
-            ks.setKeyEntry("private-key", privateKey, null, new java.security.cert.Certificate[]{chain[0]});
+            ks.setKeyEntry("private-key", privateKey, "SV2iorelD1".toCharArray(), new java.security.cert.Certificate[]{chain[0]});
             //ks.setKeyEntry("private-key", privateKey.getEncoded(), new java.security.cert.Certificate[]{chain[0]});
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
             kmf.init(ks, null);

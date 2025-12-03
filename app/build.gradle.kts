@@ -37,6 +37,7 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     implementation("androidx.preference:preference-ktx:1.2.0")
-    implementation("org.eclipse.paho:org.eclipse.paho.android.service:1.0.2")
+//    implementation("org.eclipse.paho:org.eclipse.paho.android.service:1.0.2")
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     implementation ("androidx.work:work-runtime:2.7.1")
 }
