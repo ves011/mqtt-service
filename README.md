@@ -83,7 +83,14 @@ Short story of this class and why is needed.
 While testing the app i noticed, when the phone screen is black and no charger connected, the broker disconnect the client app for exceeding timeout.
 Digging further i saw in this case (phone screen black and no charger connected) no PINGREQ/PINGRESP packets are exchanged between the client and broker as per MQTT specifications (every keepalive interval).
 If screen is on (no matter is locked or not) or charger connected PINGREQ/PINGRESP packets are exchanged as expected.
-
+Digging even further i found a missing connect parameter, **automaticReconnect**, which default is **false**
+After setting it to **true**, PINGREQ/PINGRESP packets started to flow and the broker no longer disconnects the app.
+Thinking this is the culprit, i tested again with **automaticReconnect = false**, and obviously the issue could not be reproduces again.
+This, for me its an inconsistent behavior and my guess is that it is related more with the power management in Android than paho MQTT client implementation.
+Any case having a reliable connection to receive messages from broker, this is critical for me, and the role of this class is to ensure higher reliability, even it looks redundant (and it is in a normal situation).
+Basically the class implements a thread which sends a dumb message to broker every keepalive interval.
+So in case PINGREQ is missed for whatever reason the broker will still receive a message from this client and will no longer complain about timeout exceeded.
+Worst case is that every keepalive interval The client will sent 2 messages instead of 1: PINGREQ and dumb message.
 
 
 
