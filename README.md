@@ -76,7 +76,7 @@ The filter allow receiving BOOT_COMPLETED and LOCKED_BOOT_COMPLETED system messa
 ## getCertificate.java
 
 This class is needed only because android forbids selecting the certificates in the main thread of app.
-In MainActivity certificate selection is done via  **KeyChain.choosePrivateKeyAlias()** which creates its own thread, but in the case the service is started at boot, without UI, the service needs to retrieve the certificates using alias stored in app preferences. So a **getCertificate** class implements a thread for this purpose.
+In MainActivity certificate selection is done via  **KeyChain.choosePrivateKeyAlias()** which creates its own thread, but in the case the service is started at boot, without UI, the service needs to retrieve the certificates using alias stored in app preferences. So **getCertificate** class implements a thread for this purpose.
 
 ## HeartBeat.java
 Short story of this class and why is needed.

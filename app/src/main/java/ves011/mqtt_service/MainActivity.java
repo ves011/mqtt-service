@@ -262,6 +262,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
                 ts = Toast.makeText(this, "not connected to server", Toast.LENGTH_LONG);
             else if(ret == -2) // error publising message
                 ts = Toast.makeText(this, "publish message error", Toast.LENGTH_LONG);
+            Log.d(TAG, "publish msg - ret = " + ret);
             }
         else
             ts = Toast.makeText(this, "publish topic not provided or invalid", Toast.LENGTH_LONG);
