@@ -54,14 +54,14 @@ public class MQTTService extends Service
     private final int NOT_STATE_ID = 1, NOT_MSG_ID = 101;
     public X509Certificate[] chain = null;
     public PrivateKey privateKey = null;
-    public String serverUrl = null, aliasCert = null, subscribeTopic = null, publishTopic = null;
-    //up to max 5 topics
+    public String serverUrl = null, aliasCert = null, subscribeTopic = null, publishTopic = null, kaTopic = null;
+    private String clientID = "android_" + System.currentTimeMillis() / 1000L;
     public MqttClient client;
     private final int keepAlive = 200;
 
     //private final IBinder mBinder = new LocalBinder();
     public boolean isRunning = false, isConnected = false;
-    private HeartBeat hb;
+    public HeartBeat hb;
     //private Binder binder = new Binder();
     
     MqttCallbackExtended MQTTcb = new MqttCallbackExtended()
@@ -77,7 +77,6 @@ public class MQTTService extends Service
             intent.putExtra("PUBTOPIC", publishTopic);
             intent.putExtra("STATE", isConnected);
             intent.putExtra("ERROR", "");
-            hb.startLoop();
             stateNotification();
             sendBroadcast(intent);
             }
@@ -85,33 +84,31 @@ public class MQTTService extends Service
         @Override
         public void connectionLost(Throwable cause)
             {
-            /* some manual reconnect in case automaticReconnect = true does not work */
-            /*
             isConnected = false;
-            connect2Server();
-            if(isConnected == false)
-            */
-                {
-                isConnected = false;
-                stateNotification();
-                Intent intent = new Intent();
-                intent.setAction(getString(R.string.ACTION_STATE_CHANGE));
-                intent.putExtra("URL", serverUrl);
-                intent.putExtra("ERROR", "connection lost");
-                sendBroadcast(intent);
-                hb.stopLoop();
-                }
+            stateNotification();
+            Intent intent = new Intent();
+            intent.setAction(getString(R.string.ACTION_STATE_CHANGE));
+            intent.putExtra("URL", serverUrl);
+            intent.putExtra("ERROR", "connection lost");
+            sendBroadcast(intent);
             }
     
         @Override
         public void messageArrived(String topic, MqttMessage message) throws Exception
             {
             Intent intent = new Intent();
-            intent.setAction(getString(R.string.ACTION_NEW_MESSAGE));
-            intent.putExtra("TOPIC", topic);
-            intent.putExtra("PAYLOAD", message.getPayload());
-            sendBroadcast(intent);
-            messageNotification(topic);
+            if(topic.equals(subscribeTopic))
+                {
+                intent.setAction(getString(R.string.ACTION_NEW_MESSAGE));
+                intent.putExtra("TOPIC", topic);
+                intent.putExtra("PAYLOAD", message.getPayload());
+                sendBroadcast(intent);
+                messageNotification(topic);
+                }
+            else
+                {
+                Log.d(TAG, "keep alive message");
+                }
             }
     
         @Override
@@ -139,9 +136,8 @@ public class MQTTService extends Service
         aliasCert = settings.getString(getString(R.string.CERTALIAS), "");
         subscribeTopic = settings.getString(getString(R.string.TOPIC_MONITOR), "");
         publishTopic = settings.getString(getString(R.string.TOPIC_CTRL), "");
-
-        //createNotChnn();
-        //isRunning = true;
+        kaTopic = settings.getString(getString(R.string.TOPIC_KA), "");
+        createNotChnn();
         Log.d(TAG, "onCreate()");
         }
 
@@ -169,12 +165,14 @@ public class MQTTService extends Service
             not.flags = Notification.FLAG_ONGOING_EVENT;
             startForeground(NOT_STATE_ID, not);
             connect2Server();
-            hb = new HeartBeat(this, keepAlive);
+            //hb = new HeartBeat(this, keepAlive);
+            //hb.startLoop();
+            isRunning = true;
             }
         Log.d(TAG, "onStartCommand()");
-        isRunning = true;
         return START_STICKY;
         }
+    
     
     @Override
     public void onDestroy()
@@ -212,7 +210,6 @@ public class MQTTService extends Service
                                    .setContentIntent(pendingIntent)
                                    .setColor(getColor(R.color.white))
                                    .build();
-        
         if(ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
             NotificationManagerCompat.from(this).notify(NOT_MSG_ID, not);
         }
@@ -267,8 +264,6 @@ public class MQTTService extends Service
                     try
                         {
                         isConnected = false;
-                        // generate unique clientID
-                        String clientID = "android_" + System.currentTimeMillis() / 1000L;
                         client = new MqttClient(serverUrl, clientID, null);
                         client.setCallback(MQTTcb);
                         MqttConnectOptions options = new MqttConnectOptions();
@@ -288,6 +283,8 @@ public class MQTTService extends Service
                         Log.d(TAG, "connected!");
                         if(subscribeTopic != null)
                             client.subscribe(subscribeTopic);
+                        if(kaTopic != null)
+                            client.subscribe(kaTopic);
                         isConnected = true;
                         intent.putExtra("STATE", isConnected);
                         intent.putExtra("ERROR", "");
@@ -295,6 +292,7 @@ public class MQTTService extends Service
                         */
                         
                         //certificate authentication
+                        
                         SSLSocketFactory socketFactory = getSF();
                         if(socketFactory != null)
                             {
@@ -304,6 +302,8 @@ public class MQTTService extends Service
                             Log.d(TAG, "connected!");
                             if(subscribeTopic != null)
                                 client.subscribe(subscribeTopic);
+                            if(kaTopic != null)
+                                client.subscribe(kaTopic);
                             }
                         else
                             {
@@ -312,6 +312,8 @@ public class MQTTService extends Service
                             stateNotification();
                             sendBroadcast(intent);
                             }
+                        //------------------------------------------------------
+                        
                         }
                     catch(MqttException e)
                         {
@@ -355,7 +357,18 @@ public class MQTTService extends Service
         }
     public void disconnect()
         {
-        try {client.disconnect();}
+        try
+            {
+            client.disconnect();
+            isConnected = false;
+            Intent intent = new Intent();
+            intent.setAction(getString(R.string.ACTION_STATE_CHANGE));
+            intent.putExtra("URL", serverUrl);
+            intent.putExtra("STATE", isConnected);
+            intent.putExtra("ERROR", "disconnected by user");
+            stateNotification();
+            sendBroadcast(intent);
+            }
         catch(Exception e) { e.printStackTrace();}
         }
     public void setCerts(X509Certificate[] c,    PrivateKey pk, String alias)

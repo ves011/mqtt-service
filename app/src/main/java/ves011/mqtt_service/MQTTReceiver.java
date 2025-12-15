@@ -10,8 +10,8 @@ public class MQTTReceiver extends BroadcastReceiver
     @Override
     public void onReceive(Context context, Intent intent)
         {
-        //no need to check action name because its filtered in the manifest
-        Log.d("BCRECEIVER", intent.getAction());
+        String action = intent.getAction();
+        Log.d("BCRECEIVER", action);
         Intent intentService = new Intent(context, MQTTService.class);
         context.startForegroundService(intentService);
         }

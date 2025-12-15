@@ -22,8 +22,8 @@ To implement 2-way authentication certificate based, it requires the client cert
 All these have to be installed on your device in order to allow the service to connect to the broker.
 As i said i used easyRSA to create my own PKI self-signed infrastructure and generate server certificate and key and client certificate and key.
 My mosquitto broker is configured to accept TLS connection on port 1886 with the options below
-> **require_certificate true<br>
-> use_subject_as_username true**
+> **require_certificate true**
+> **use_subject_as_username true**
 
 On the phone the client certificate is installed using **Install from device storage --> VPN and app user certificate** option, while CA certificate is installed using **Install from device storage --> CA certificate**.
 For the example in the code i used the client certificate with the alias **mqtt-cert**. 
@@ -79,18 +79,36 @@ This class is needed only because android forbids selecting the certificates in 
 In MainActivity certificate selection is done via  **KeyChain.choosePrivateKeyAlias()** which creates its own thread, but in the case the service is started at boot, without UI, the service needs to retrieve the certificates using alias stored in app preferences. So **getCertificate** class implements a thread for this purpose.
 
 ## HeartBeat.java
-Short story of this class and why is needed.
-While testing the app i noticed, when the phone screen is black and no charger connected, the broker disconnect the client app for exceeding timeout.
-Digging further i saw in this case (phone screen black and no charger connected) no PINGREQ/PINGRESP packets are exchanged between the client and broker as per MQTT specifications (every keepalive interval).
-If screen is on (no matter is locked or not) or charger connected PINGREQ/PINGRESP packets are exchanged as expected.
-Digging even further i found a missing connect parameter, **automaticReconnect**, which default is **false**
-After setting it to **true**, PINGREQ/PINGRESP packets started to flow and the broker no longer disconnects the app.
-Thinking this is the culprit, i tested again with **automaticReconnect = false**, and obviously the issue could not be reproduces again.
-This, for me its an inconsistent behavior and my guess is that it is related more with the power management in Android than paho MQTT client implementation.
-Any case having a reliable connection to receive messages from broker, this is critical for me, and the role of this class is to ensure higher reliability, even it looks redundant (and it is in a normal situation).
-Basically the class implements a thread which sends a dumb message to broker every keepalive interval.
-So in case PINGREQ is missed for whatever reason the broker will still receive a message from this client and will no longer complain about timeout exceeded.
-Worst case is that every keepalive interval The client will sent 2 messages instead of 1: PINGREQ and dumb message.
+This class was intended to keep connection active by sending a dumb message to broker at an interval much shorter than MQTT **keepAlive**. (e.g if **keepAlive** set to 200 sec, send a message every 20 seconds).
+I was hoping that even doze mode will degrade the rate, still **HearBeat->t_wait()** thread will have the chance to send at least one message during **keepAlive** interval.
+But maintenance window goes much larger than **keepAlive** and **HearBeat->t_wait()** its not scheduled at all within the required interval. Some point in time the client gets disconnected because of inactivity.
+
+It is no longer used, but I still keep it in the repository 
 
 
+# Keeping permanent alive connection
 
+My plan is to use this application to monitor couple of critical sensors (water and heating) placed in my house. So, I need to ensure a permanent and reliable connection with the broker and that proved to be a big challenge with Android.<br>
+According to MQTT protocol, the client needs to show some activity towards broker (send or receive a message) within **keepAlive** interval + grace period (usually 50% of **keepAlive** interval). If client is idle, it has to send a PINGREQ message to broker, at least every **keepAlive** interval. If broker misses client activity during this interval, will disconnects it because of inactivity.<br>
+Paho client implementation contains PINGREQ/PINGRSP procedure which is activated in case no message is sent/received during **keepAlive** interval. Together with **automaticReconnect** set to true, it might look keeping connection active is out of the box.<br>
+Here comes into the picture Android power management, which starts to throttle execution of background processes as soon as the phone goes idle (screen locked and black) and no charger connected. And it gets really bad when it enters doze mode.
+Here is a capture with the description of the doze mode form official documentation (https://developer.android.com/training/monitoring-device-state/doze-standby)
+>> <img src="doze.png" alt="https://developer.android.com/training/monitoring-device-state/doze-standby">
+
+Which means the piece of code, in paho client implementation, responsible for sending PINGREQ messages, is no longer scheduled based on its programmed timing rate, but during maintenance window. Looking closer,  **“..Over time, the system schedules maintenance windows less frequently...”**, which some point in time exceeds the **keepAlive** interval specified in connection parameters, and broker disconnects the client. The other connection parameter, **automaticReconnect**, if set to true will force a reconnection, and everything looks to be ok, but there are 2 drawbacks:
+1. because of the maintenance window reconnect might happen immediately or in the next window. It might take 10s of minutes until reconnect happens, while I might loose critical events reported by the sensors.
+2. I want my phone to notify me on any critical event (with sound and vibration) and disconnect/reconnect is one of them. I don't want on late night the phone to wake me up only because Android maintenance window wants to tell me something.
+
+So, the timings of client PINGREQ/PINGRSP procedure, or HeartBeat, are disregarded and from time to time, connection gets dropped and reestablished again. This might be acceptable if you can live with the 2 drawbacks, but i cannot.
+
+The solution i found is to let the monitored devices to publish a periodic message to a dedicated "keepAlive" topic and Android MQTT service to subscribe to this topic.
+The documentation states the following behavior (https://source.android.com/docs/core/power/platform_mgmt)
+- **doze (lightweight) non-stationary**: 
+-- "All real-time messages (instant messages, calls, etc.) received; high-priority push notification message enables temporary network access"
+- **doze stationary**:
+ -- "Only high-priority push notification messages received"
+
+Not sure if a MQTT message is part of "high-priority push notification", but after several days of testing with **keepAlive** set to 200 sec on client side and the device sending a message every 100 sec, I get only 2 - 3 infrequent disconnects per day, none of that because client inactivity.
+So it works, but only **if you are in a fortunate position where you can adjust some device in your network to send - in a reliable way - these "keepAlive" messages**.
+
+Bottom line Android is pricing more battery saving and when it comes to choose between battery life and timely based execution, it definitely choose the battery.

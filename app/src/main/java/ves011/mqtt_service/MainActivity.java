@@ -36,14 +36,13 @@ import java.util.Date;
 
 public class MainActivity extends AppCompatActivity implements KeyChainAliasCallback
     {
-    // declaring objects of Button class
+    public static MainActivity ma;
     private Button ssButton;
     private TextView tvCert, tvServer, tvState, tvTopics, tvConError, tvTimeStamp, tvMsgContent;
     private final String TAG = "MA";
     AlertDialog dialog;
     MQTTService mqttservice = null;
     private String serverURL, certAlias, subscribeTopic = null, publishTopic = null;
-
     private final BroadcastReceiver receiver = new BroadcastReceiver()
         {
         @Override
@@ -134,6 +133,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
     protected void onCreate(Bundle savedInstanceState)
         {
         super.onCreate(savedInstanceState);
+        ma = this;
         setContentView(R.layout.activity_main);
         serverURL = null;
         certAlias = null;
@@ -153,7 +153,6 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
         ssButton = findViewById(R.id.ssButton);
         ssButton.setText("N/A");
 
-        
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(getString(R.string.ACTION_NEW_MESSAGE));
         intentFilter.addAction(getString(R.string.ACTION_STATE_CHANGE));
@@ -234,18 +233,22 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
         }
     public void saveTopics(View v)
         {
-        String st, pt;
+        String st, pt, kt[];
         st = ((TextView) dialog.findViewById(R.id.subtopic)).getText().toString();
         pt = ((TextView) dialog.findViewById(R.id.pubtopic)).getText().toString();
+        kt = st.split("/");
+        kt[0] += "/ka";
         SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
         SharedPreferences.Editor ed = settings.edit();
         ed.putString(getString(R.string.TOPIC_MONITOR), st);
         ed.putString(getString(R.string.TOPIC_CTRL), pt);
+        ed.putString(getString(R.string.TOPIC_KA), kt[0]);
         ed.apply();
         if(mqttservice != null)
             {
             mqttservice.publishTopic = pt;
             mqttservice.subscribeTopic = st;
+            mqttservice.kaTopic = kt[0];
             }
         String str = "subscribed: " + st + "\n" +
                              "publish: " + pt;
@@ -283,7 +286,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
             Log.d(TAG, "User selected alias: " + alias);
             SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
             SharedPreferences.Editor ed = settings.edit();
-            ed.putString("certAlias", alias);
+            ed.putString(getString(R.string.CERTALIAS), alias);
             ed.apply();
             try
                 {
@@ -309,7 +312,7 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
             mqttservice.setCerts(null, null, null);
             SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
             SharedPreferences.Editor ed = settings.edit();
-            ed.putString("certAlias", "");
+            ed.putString(getString(R.string.CERTALIAS), "");
             ed.apply();
             Intent intent = new Intent();
             intent.setAction(getString(R.string.ACTION_STATE_CHANGE));
@@ -388,11 +391,5 @@ public class MainActivity extends AppCompatActivity implements KeyChainAliasCall
             state += "Uptime: " + fields[11] +"d " + fields[12] +"h " + fields[13] +"m " + fields[14] +"s\n";
             tvMsgContent.setText(state);
             }
-        
-        
-        /*
-        parse received messages and display the content
-        */
         }
-    
     }

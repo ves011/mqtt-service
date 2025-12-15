@@ -21,6 +21,7 @@
     <!-- default topic names -->
     <string name="TOPIC_MONITOR">wmon/state</string>
     <string name="TOPIC_CTRL">wmon/ctrl</string>
+    <string name="TOPIC_KA">wmon/ka</string>
 
     <!-- message sent to TOPIC_CTRL when user press getState button -->
     <string name="GETSTATE_MSG">wmon status</string>
